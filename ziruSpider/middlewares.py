@@ -7,9 +7,8 @@
 
 import redis
 import random
-from scrapy import signals
-from scrapy.downloadermiddlewares.retry import RetryMiddleware
-from scrapy.utils.response import response_status_message
+import logging
+from scrapy import signals, Request
 
 
 class ZiruspiderSpiderMiddleware(object):
@@ -64,11 +63,13 @@ class ZiruspiderDownloaderMiddleware(object):
     # Not all methods need to be defined. If a method is not defined,
     # scrapy acts as if the downloader middleware does not modify the
     # passed objects.
+    def __init__(self, ua):
+        self.ua = ua
 
     @classmethod
     def from_crawler(cls, crawler):
         # This method is used by Scrapy to create your spiders.
-        s = cls()
+        s = cls(crawler.settings.get("USER_AGENT"))
         crawler.signals.connect(s.spider_opened, signal=signals.spider_opened)
         return s
 
@@ -82,6 +83,7 @@ class ZiruspiderDownloaderMiddleware(object):
         # - or return a Request object
         # - or raise IgnoreRequest: process_exception() methods of
         #   installed downloader middleware will be called
+        request.headers['User-Agent'] = random.choice(self.ua)
         return None
 
     def process_response(self, request, response, spider):
@@ -108,52 +110,44 @@ class ZiruspiderDownloaderMiddleware(object):
 
 
 class RandomProxy:
-
-    def __init__(self, ua):
-        self.pool = redis.ConnectionPool(host='127.0.0.1', port=6379, db=0)
-        self.ua = ua
+    """
+    将每次请求加上代理ip
+    """
+    def __init__(self, proxy_key, redis_setting):
+        self.proxy_key = proxy_key
+        self.server = redis.Redis(*redis_setting)
 
     @classmethod
     def from_crawler(cls, crawler):
-        # This method is used by Scrapy to create your spiders.
-        return cls(random.choice(crawler.settings.getlist("USER_AGENT")))
+        return cls(crawler.settings.get("PROXY_KEY"), crawler.settings.getlist("REDIS"))
+
+    def set_proxy(self, server):
+        return server.srandmember(self.proxy_key, 1)[0].decode("utf-8")
 
     def process_request(self, request, spider):
-        con = redis.Redis(connection_pool=self.pool)
-        proxy = con.srandmember("http_proxies", 1)[0].decode("utf-8")
-        request.headers.setdefault("User-Agent", self.ua)
-        request.meta["proxy"] = "http://" + proxy
-
-
-class MyRetryMiddleware:
-
-    def __init__(self, redis_setting):
-        self.redis_con = redis.Redis(*redis_setting)
-
-    @classmethod
-    def from_crawler(cls, spider):
-        return cls(spider.settings.getlist("REDIS"))
-
-    def delete_and_change_proxy(self, proxy):
-        if "https" in proxy:
-            self.redis_con.srem("https_proxies", proxy[8:])
-            return self.redis_con.srandmember("https_proxies", 1)[0].decode("utf-8")
-        else:
-            self.redis_con.srem("http_proxies", proxy[7:])
-            return self.redis_con.srandmember("http_proxies", 1)[0].decode("utf-8")
+        request.meta["proxy"] = "http://" + self.set_proxy(self.server)
 
     def process_exception(self, request, exception, spider):
         if exception:
-            print(exception)
-            request.meta['proxy'] = "https://" + self.delete_and_change_proxy(request.meta['proxy'])
-            print("连接异常，更换代理ip重试", request.meta['proxy'])
-            return request
+            logging.error("连接异常，返回消息队列")
+            self.server.srem(self.proxy_key, request.meta['proxy'][7:])
+            r = Request(request.url, callback=request.callback, dont_filter=True)
+            try:
+                r.meta['area_name'] = request.meta['area_name']
+            except:
+                pass
+            return r
 
     def process_response(self, request, response, spider):
         if response.status != 200:
-            request.meta['proxy'] = "https://" + self.delete_and_change_proxy(request.meta['proxy'])
-            print("状态码异常，更换代理ip重试", request.meta['proxy'])
-            return request
+            logging.error("状态码异常，返回消息队列")
+            self.server.srem(self.proxy_key, request.meta['proxy'][7:])
+            r = Request(request.url, callback=request.callback, dont_filter=True)
+            try:
+                r.meta['area_name'] = request.meta['area_name']
+            except:
+                pass
+            return r
         return response
 
 

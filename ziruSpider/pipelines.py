@@ -16,7 +16,7 @@ class ZiruspiderPipeline(object):
 
 	def process_item(self, item, spider):
 		self.cur.execute(
-			f"insert into zufang values (null,'{item['title']}','{item['area']}','{item['addr']}','{item['apartment']}','{item['rooms']}',{item['price']});"
+			f"insert into zufang_20190110 values (null,'{item['title']}','{item['area']}','{item['addr']}','{item['apartment']}','{item['rooms']}',{item['price']});"
 		)
 		return item
 

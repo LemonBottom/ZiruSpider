@@ -11,9 +11,9 @@ class OcrBaidu:
 	def __init__(self):
 		# 过期时间30天
 		self.access_token_list =[
-			"24.3853b79374354b9068ad459a8f244f6a.2592000.1547372584.282335-14594301",
-			"24.b9878a9601727e6361da3c418e15c63e.2592000.1547365035.282335-15163958",
-			"24.aa811273409b7ef1454c9306d31de4d9.2592000.1547365302.282335-15164274"]
+			"24.84bded3564c54ee29eb56774c350b7b1.2592000.1549695768.282335-14594301",
+			"24.c5c5f05a9c3fd5bbccdfe0c47fa0ff32.2592000.1549695826.282335-15163958",
+			"24.85fc209481352cd05119d8d36dde87ed.2592000.1549695880.282335-15164274"]
 
 	def ocr(self, image_bin, level):
 		"""
@@ -60,4 +60,4 @@ class OcrBaidu:
 
 
 if __name__ == "__main__":
-	print(OcrBaidu().access_token("userKey", "secretStr"))
+	print(OcrBaidu().access_token("appId", "secretStr"))
